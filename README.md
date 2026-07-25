@@ -14,11 +14,10 @@ release:
 | Platform | Download |
 | --- | --- |
 | Windows 10/11 (64-bit) | [VocalSlice-Setup.exe](https://github.com/terranivium/vocal-slice-releases/releases/latest/download/VocalSlice-Setup.exe) |
-| Windows — portable, no install | [VocalSlice-Portable.exe](https://github.com/terranivium/vocal-slice-releases/releases/latest/download/VocalSlice-Portable.exe) |
 | macOS 11 and later (universal) | [VocalSlice.dmg](https://github.com/terranivium/vocal-slice-releases/releases/latest/download/VocalSlice.dmg) |
 
-The installer and the macOS build update themselves. The portable build does not — re-download it when
-a new version ships.
+The installer and the macOS app update themselves automatically. (On the release page you'll also see
+`VocalSlice-macOS-update.zip` — that's the package the macOS app updates itself from, not a download.)
 
 ## Verifying a download
 

@@ -50,5 +50,5 @@ Questions or problems: `wesley@vocalslice.com`
 
 © 2026 Wesley Scott t/a Vocal Slice. All rights reserved. Vocal Slice is proprietary software — see [LICENSE](LICENSE)
 for the terms covering these downloads. The app bundles open-source components, each under its own
-licence; the full notices ship with the app and are viewable under *Settings → About → Third-party
-licenses*.
+licence; the full notices ship with the app (viewable under *Settings → About → Third-party licenses*)
+and are reproduced here in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

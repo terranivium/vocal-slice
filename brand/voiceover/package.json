@@ -1,0 +1,10 @@
+{
+  "name": "vocal-slice-voiceover",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Isolated install for the press-video voiceover. NOT part of the app — see ../build-voiceover.mjs.",
+  "type": "module",
+  "dependencies": {
+    "kokoro-js": "^1.2.1"
+  }
+}

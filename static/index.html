@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vocal Slice</title>
+    <link rel="icon" type="image/x-icon" href="./AppIcon.ico">
+    <link rel="stylesheet" href="./styles.css">
+    <!-- Phosphor Icons (vendored locally — regular + fill weights) -->
+    <link rel="stylesheet" href="vendor/phosphor/regular/style.css">
+    <link rel="stylesheet" href="vendor/phosphor/fill/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" id="transcription-tab-btn" onclick="switchTab('transcription', this)">
+                    <i class="ph ph-note-pencil"></i>
+                    Transcription
+                </button>
+                <button class="tab" id="slices-tab-btn" onclick="switchTab('slices', this)">
+                    <i class="ph ph-scissors"></i>
+                    Slices
+                </button>
+                <button class="tab" id="log-tab-btn" style="display:none" onclick="switchTab('log', this)">
+                    <i class="ph ph-terminal"></i>
+                    Log
+                </button>
+                <button class="tab" id="settings-tab-btn" onclick="switchTab('settings', this)">
+                    <i class="ph ph-gear"></i>
+                    Settings
+                </button>
+                
+                <!-- Status Icons -->
+                <div class="status-icons">
+                    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">
+                        <i class="ph-fill ph-moon" id="theme-icon"></i>
+                    </button>
+                    <i id="gpu-status-light" class="ph-fill ph-circle gpu-dot" title="Checking WebGPU support..."></i>
+                </div>
+            </div>
+            
+            <!-- Transcription Tab -->
+            <div id="transcription-tab" class="tab-content active">
+                <!-- File / model controls (live in the Transcription tab) -->
+                <div class="top-controls">
+                    <input type="file" id="audio-file" accept="audio/*" style="display: none;" onchange="handleFileSelected()">
+
+                    <button type="button" class="file-info" id="file-info" onclick="handleFileSelected()" title="Choose or change audio file">
+                        <i class="ph ph-folder-open"></i>
+                        <span>Select audio file</span>
+                    </button>
+
+                    <button class="icon-btn" id="language-settings-btn" onclick="openLanguageSettings()" title="Model & language settings">
+                        <i class="ph ph-translate"></i>
+                    </button>
+
+                    <button class="btn btn-primary" id="transcribe-btn" onclick="handleTranscribe()" disabled>
+                        <i class="ph ph-subtitles"></i>
+                        Transcribe
+                    </button>
+                </div>
+
+                <div id="transcription-loading" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p id="transcription-loading-text">Preparing…</p>
+                    <div id="loading-progress" class="loading-progress" style="display:none;">
+                        <div class="progress-bar">
+                            <div id="loading-progress-fill" class="progress-fill"></div>
+                        </div>
+                    </div>
+                    <!-- Words stream in here while decoding, so a long run visibly isn't stuck. -->
+                    <div id="transcription-preview" class="transcription-preview" style="display:none;"></div>
+                </div>
+                
+                <div id="transcription-content" style="display: none;">
+                    <!-- Search Controls -->
+                    <div class="search-controls">
+                        <div class="search-input-wrapper">
+                            <input type="text" id="search-box" class="search-input" placeholder="Search in transcription" />
+                            <span class="match-counter" id="search-results-label"></span>
+                            <button class="search-icon-btn" id="search-icon-btn" tabindex="-1" title="Search">
+                                <i class="ph ph-magnifying-glass" id="search-icon"></i>
+                            </button>
+                        </div>
+                        <button class="btn btn-small search-nav-btn" id="prev-btn" onclick="navigateSearch(false)" disabled title="Previous match">
+                            <i class="ph ph-caret-left"></i>
+                        </button>
+                        <button class="btn btn-small search-nav-btn" id="next-btn" onclick="navigateSearch(true)" disabled title="Next match">
+                            <i class="ph ph-caret-right"></i>
+                        </button>
+                    </div>
+                    <!-- Transcription Editor with Highlight Overlay -->
+                    <div class="form-group">
+                        <div class="textarea-wrapper">
+                            <div id="highlight-layer" class="highlight-layer"></div>
+                            <textarea id="transcription-text" readonly placeholder="Transcription results will appear here..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Waveform section — shown once audio is loaded -->
+                    <div id="transcription-waveform-section" style="display:none; margin-top:12px;">
+                        <div id="waveform-loading" class="loading">
+                            <div class="spinner"></div>
+                            <p>Loading audio…</p>
+                        </div>
+                        <div class="waveform-container">
+                            <div id="waveform-inner" class="waveform-inner">
+                                <canvas id="waveform-canvas"></canvas>
+                                <div id="waveform-selection" class="waveform-selection" style="display:none;"></div>
+                                <div id="waveform-text-layer" class="waveform-text-layer"></div>
+                                <div id="waveform-start-handle" class="waveform-handle waveform-handle-start" style="display:none;"></div>
+                                <div id="waveform-end-handle" class="waveform-handle waveform-handle-end" style="display:none;"></div>
+                                <div id="waveform-playhead" class="waveform-playhead"></div>
+                            </div>
+                        </div>
+                        <div class="waveform-actions">
+                        <div class="transport-controls">
+                            <button class="transport-btn" id="preview-play-btn" onclick="playPreview()" title="Play">
+                                <i class="ph-fill ph-play"></i>
+                            </button>
+                            <button class="transport-btn" id="preview-pause-btn" onclick="pausePreview()" title="Pause" style="display: none;">
+                                <i class="ph-fill ph-pause"></i>
+                            </button>
+                            <button class="transport-btn" id="preview-stop-btn" onclick="stopPreview()" title="Stop">
+                                <i class="ph-fill ph-stop"></i>
+                            </button>
+                            <button class="transport-btn" id="preview-loop-btn" onclick="toggleLoop()" title="Loop playback">
+                                <i class="ph ph-repeat"></i>
+                            </button>
+                            <div class="transport-divider"></div>
+                            <select id="playback-speed" class="transport-select" onchange="updatePlaybackSpeed()" title="Playback speed">
+                                <option value="0.5">0.5x</option>
+                                <option value="0.75">0.75x</option>
+                                <option value="1" selected>1x</option>
+                                <option value="1.25">1.25x</option>
+                                <option value="1.5">1.5x</option>
+                                <option value="2">2x</option>
+                            </select>
+                            <div class="transport-divider"></div>
+                            <div class="time-input-group">
+                                <label>Start:</label>
+                                <input type="number" id="preview-start-time" step="0.01" min="0" onchange="updatePreviewFromInputs()">
+                            </div>
+                            <div class="time-input-group">
+                                <label>End:</label>
+                                <input type="number" id="preview-end-time" step="0.01" min="0" onchange="updatePreviewFromInputs()">
+                            </div>
+                            <div class="time-duration">
+                                Duration: <span id="preview-duration">0.00s</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" id="create-slice-btn" disabled>
+                            <i class="ph ph-plus-circle"></i> Create Slice
+                        </button>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div id="transcription-empty" class="empty-state">
+                    <div class="empty-state-icon">
+                        <i class="ph ph-note-pencil"></i>
+                    </div>
+                    <p>Select an audio file and click "Transcribe" to get started</p>
+                </div>
+            </div>
+            
+            <!-- Slices Tab -->
+            <div id="slices-tab" class="tab-content">
+                <div id="slices-toolbar" style="display:none; align-items:center; gap:8px; margin-bottom:12px;">
+                    <span style="font-size:13px; color:var(--subtext0);">Sort:</span>
+                    <select id="slices-sort-select" class="transport-select" style="width:auto; min-width:130px;">
+                        <option value="newest">Newest</option>
+                        <option value="oldest">Oldest</option>
+                        <option value="name-az">Name A–Z</option>
+                        <option value="name-za">Name Z–A</option>
+                        <option value="duration-asc">Shortest</option>
+                        <option value="duration-desc">Longest</option>
+                    </select>
+                    <div id="slices-selection">
+                        <span id="slices-selected-count"></span>
+                        <button class="slices-toolbar-btn" id="slices-select-all-btn">Select all</button>
+                        <button class="slices-toolbar-btn slices-toolbar-btn-primary" id="export-slices-btn" disabled>
+                            <i class="ph ph-download-simple"></i> Export selected
+                        </button>
+                    </div>
+                </div>
+                <div id="slices-list" class="slice-list"></div>
+                
+                <div id="slices-empty" class="empty-state">
+                    <div class="empty-state-icon">
+                        <i class="ph ph-scissors"></i>
+                    </div>
+                    <p>No slices yet. Create slices from the Transcription tab.</p>
+                </div>
+            </div>
+            
+            <!-- Log Tab -->
+            <div id="log-tab" class="tab-content">
+                <div class="log-toolbar">
+                    <button class="btn btn-small" onclick="copyDiagnostics()" title="Copy app info + log to the clipboard">
+                        <i class="ph ph-clipboard-text"></i> Copy diagnostics
+                    </button>
+                    <button class="btn btn-small" onclick="saveDiagnostics()" title="Save app info + log to a file">
+                        <i class="ph ph-floppy-disk"></i> Save to file
+                    </button>
+                    <button class="btn btn-small btn-secondary" onclick="clearLog()" title="Clear the log">
+                        <i class="ph ph-trash"></i> Clear
+                    </button>
+                    <span class="log-hint">Includes the log below — may contain file names and transcript text. Review before sharing.</span>
+                </div>
+                <div class="log-content" id="log-content">
+                    <div class="log-entry">Initializing...</div>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div id="settings-tab" class="tab-content">
+              <div class="settings-layout">
+                <!-- Sub-navigation: one panel per group (see .settings-panel below) -->
+                <nav class="settings-nav">
+                    <button class="settings-nav-btn active" onclick="switchSettingsPanel('transcription', this)">
+                        <i class="ph ph-waveform"></i> Transcription
+                    </button>
+                    <button class="settings-nav-btn" onclick="switchSettingsPanel('appearance', this)">
+                        <i class="ph ph-palette"></i> Appearance
+                    </button>
+                    <button class="settings-nav-btn" onclick="switchSettingsPanel('export', this)">
+                        <i class="ph ph-export"></i> Export
+                    </button>
+                    <button class="settings-nav-btn" onclick="switchSettingsPanel('storage', this)">
+                        <i class="ph ph-hard-drives"></i> Storage
+                    </button>
+                    <button class="settings-nav-btn" onclick="switchSettingsPanel('advanced', this)">
+                        <i class="ph ph-sliders-horizontal"></i> Advanced
+                    </button>
+                    <button class="settings-nav-btn" onclick="switchSettingsPanel('about', this)">
+                        <i class="ph ph-info"></i> About
+                    </button>
+                </nav>
+
+                <div class="settings-panels">
+
+                <!-- Transcription: model & processing -->
+                <div class="settings-panel active" id="settings-panel-transcription">
+                <div class="settings-section" id="model-processing-settings">
+
+                    <!-- Device Selection -->
+                    <div class="form-group">
+                        <label for="device-select">Processing Device</label>
+                        <select id="device-select">
+                            <option value="webgpu" selected>GPU (WebGPU) - Fast, optimized</option>
+                            <option value="wasm">CPU (WebAssembly) - Slower, more compatible</option>
+                        </select>
+                        <!-- Said here because this is where the choice is made. It isn't a warning
+                             about speed — transcribing on the CPU runs on the same thread that draws
+                             the window, so the app stops responding until the run finishes. See the
+                             proxy note at the top of static/js/app.js for why. -->
+                        <div class="settings-hint">
+                            On the CPU, Vocal Slice stops responding while it transcribes — the window
+                            comes back when the run finishes. On a graphics card it stays usable.
+                        </div>
+                    </div>
+                    
+                    <!-- Model Selection -->
+                    <div class="form-group">
+                        <label for="model-select">Whisper Model</label>
+                        <!-- Sizes here are a fallback only: applyModelSizes() in app.js replaces them
+                             at load with either the model's real size on disk (already downloaded) or
+                             what it will cost to fetch on THIS machine's backend — a q4 decoder on
+                             WebGPU, a much larger fp32 one on CPU. These defaults are the WebGPU
+                             download case, since nothing is downloaded on a first run, written in the
+                             same binary MB the Storage panel uses so the label can't disagree with
+                             itself the moment the rewrite runs.
+                             applyModelSizes() also disables the options this machine can't run: a
+                             model is offered on exactly the backends its weights map names, and one
+                             that names only WebGPU reads "(needs GPU)" on a CPU-only machine rather
+                             than offering a download that couldn't load. Every model shipped today,
+                             Medium included, runs on both. -->
+                        <select id="model-select">
+                            <optgroup label="English only">
+                                <option value="onnx-community/whisper-tiny.en_timestamped" selected>Whisper Tiny EN (118.2 MB download) - Fastest, English Only</option>
+                                <option value="onnx-community/whisper-base.en_timestamped">Whisper Base EN (200.7 MB download) - Fast, English Only</option>
+                                <option value="onnx-community/whisper-small.en_timestamped">Whisper Small EN (563.1 MB download) - Balanced, English Only</option>
+                                <option value="onnx-community/whisper-medium.en_timestamped">Whisper Medium EN (1.6 GB download) - Best accuracy, slowest, English Only</option>
+                            </optgroup>
+                            <optgroup label="Multilingual">
+                                <option value="onnx-community/whisper-tiny_timestamped">Whisper Tiny Multilingual (118.3 MB download) - Fastest</option>
+                                <option value="onnx-community/whisper-base_timestamped">Whisper Base Multilingual (200.8 MB download) - Fast</option>
+                                <option value="onnx-community/whisper-small_timestamped">Whisper Small Multilingual (563.2 MB download) - Balanced</option>
+                                <option value="onnx-community/whisper-medium_timestamped">Whisper Medium Multilingual (1.6 GB download) - Best accuracy, slowest</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    
+                    <!-- Language Selection -->
+                    <!-- The select stays the source of truth (settings persistence and the
+                         transcribe path both read its .value); the combobox below is the visible
+                         control, since 99 options is more than a native dropdown can present. -->
+                    <div class="form-group">
+                        <label for="language-search">Language</label>
+                        <select id="language-select" class="visually-hidden" tabindex="-1" aria-hidden="true">
+                            <option value="af">Afrikaans</option>
+                            <option value="sq">Albanian (Shqip)</option>
+                            <option value="am">Amharic (አማርኛ)</option>
+                            <option value="ar">Arabic (العربية)</option>
+                            <option value="hy">Armenian (Հայերեն)</option>
+                            <option value="as">Assamese (অসমীয়া)</option>
+                            <option value="az">Azerbaijani (Azərbaycan)</option>
+                            <option value="ba">Bashkir (Башҡортса)</option>
+                            <option value="eu">Basque (Euskara)</option>
+                            <option value="be">Belarusian (Беларуская)</option>
+                            <option value="bn">Bengali (বাংলা)</option>
+                            <option value="bs">Bosnian (Bosanski)</option>
+                            <option value="br">Breton (Brezhoneg)</option>
+                            <option value="bg">Bulgarian (Български)</option>
+                            <option value="my" data-alt="Myanmar">Burmese (မြန်မာ)</option>
+                            <option value="ca" data-alt="Valencian">Catalan (Català)</option>
+                            <option value="zh" data-alt="Mandarin">Chinese (中文)</option>
+                            <option value="hr">Croatian (Hrvatski)</option>
+                            <option value="cs">Czech (Čeština)</option>
+                            <option value="da">Danish (Dansk)</option>
+                            <option value="nl" data-alt="Flemish">Dutch (Nederlands)</option>
+                            <option value="en" selected>English</option>
+                            <option value="et">Estonian (Eesti)</option>
+                            <option value="fo">Faroese (Føroyskt)</option>
+                            <option value="fi">Finnish (Suomi)</option>
+                            <option value="fr">French (Français)</option>
+                            <option value="gl">Galician (Galego)</option>
+                            <option value="ka">Georgian (ქართული)</option>
+                            <option value="de">German (Deutsch)</option>
+                            <option value="el">Greek (Ελληνικά)</option>
+                            <option value="gu">Gujarati (ગુજરાતી)</option>
+                            <option value="ht">Haitian Creole (Kreyòl Ayisyen)</option>
+                            <option value="ha">Hausa</option>
+                            <option value="haw">Hawaiian (ʻŌlelo Hawaiʻi)</option>
+                            <option value="he">Hebrew (עברית)</option>
+                            <option value="hi">Hindi (हिन्दी)</option>
+                            <option value="hu">Hungarian (Magyar)</option>
+                            <option value="is">Icelandic (Íslenska)</option>
+                            <option value="id">Indonesian (Bahasa Indonesia)</option>
+                            <option value="it">Italian (Italiano)</option>
+                            <option value="ja">Japanese (日本語)</option>
+                            <option value="jw">Javanese (Basa Jawa)</option>
+                            <option value="kn">Kannada (ಕನ್ನಡ)</option>
+                            <option value="kk">Kazakh (Қазақша)</option>
+                            <option value="km">Khmer (ខ្មែរ)</option>
+                            <option value="ko">Korean (한국어)</option>
+                            <option value="lo">Lao (ລາວ)</option>
+                            <option value="la">Latin (Latina)</option>
+                            <option value="lv">Latvian (Latviešu)</option>
+                            <option value="ln">Lingala (Lingála)</option>
+                            <option value="lt">Lithuanian (Lietuvių)</option>
+                            <option value="lb" data-alt="Letzeburgesch">Luxembourgish (Lëtzebuergesch)</option>
+                            <option value="mk">Macedonian (Македонски)</option>
+                            <option value="mg">Malagasy</option>
+                            <option value="ms">Malay (Bahasa Melayu)</option>
+                            <option value="ml">Malayalam (മലയാളം)</option>
+                            <option value="mt">Maltese (Malti)</option>
+                            <option value="mi">Maori (Te Reo Māori)</option>
+                            <option value="mr">Marathi (मराठी)</option>
+                            <option value="mn">Mongolian (Монгол)</option>
+                            <option value="ne">Nepali (नेपाली)</option>
+                            <option value="no">Norwegian (Norsk)</option>
+                            <option value="nn">Norwegian Nynorsk</option>
+                            <option value="oc">Occitan</option>
+                            <option value="ps" data-alt="Pushto">Pashto (پښتو)</option>
+                            <option value="fa" data-alt="Farsi">Persian (فارسی)</option>
+                            <option value="pl">Polish (Polski)</option>
+                            <option value="pt">Portuguese (Português)</option>
+                            <option value="pa" data-alt="Panjabi">Punjabi (ਪੰਜਾਬੀ)</option>
+                            <option value="ro" data-alt="Moldovan">Romanian (Română)</option>
+                            <option value="ru">Russian (Русский)</option>
+                            <option value="sa">Sanskrit (संस्कृतम्)</option>
+                            <option value="sr">Serbian (Српски)</option>
+                            <option value="sn">Shona (chiShona)</option>
+                            <option value="sd">Sindhi (سنڌي)</option>
+                            <option value="si" data-alt="Sinhalese">Sinhala (සිංහල)</option>
+                            <option value="sk">Slovak (Slovenčina)</option>
+                            <option value="sl">Slovenian (Slovenščina)</option>
+                            <option value="so">Somali (Soomaali)</option>
+                            <option value="es" data-alt="Castilian">Spanish (Español)</option>
+                            <option value="su">Sundanese (Basa Sunda)</option>
+                            <option value="sw">Swahili (Kiswahili)</option>
+                            <option value="sv">Swedish (Svenska)</option>
+                            <option value="tl" data-alt="Filipino">Tagalog</option>
+                            <option value="tg">Tajik (Тоҷикӣ)</option>
+                            <option value="ta">Tamil (தமிழ்)</option>
+                            <option value="tt">Tatar (Татарча)</option>
+                            <option value="te">Telugu (తెలుగు)</option>
+                            <option value="th">Thai (ไทย)</option>
+                            <option value="bo">Tibetan (བོད་སྐད)</option>
+                            <option value="tr">Turkish (Türkçe)</option>
+                            <option value="tk">Turkmen (Türkmen)</option>
+                            <option value="uk">Ukrainian (Українська)</option>
+                            <option value="ur">Urdu (اردو)</option>
+                            <option value="uz">Uzbek (Oʻzbek)</option>
+                            <option value="vi">Vietnamese (Tiếng Việt)</option>
+                            <option value="cy">Welsh (Cymraeg)</option>
+                            <option value="yi">Yiddish (ייִדיש)</option>
+                            <option value="yo">Yoruba (Yorùbá)</option>
+                        </select>
+                        <div class="combobox">
+                            <input type="text" id="language-search" role="combobox"
+                                   aria-expanded="false" aria-controls="language-listbox"
+                                   aria-autocomplete="list" autocomplete="off" spellcheck="false"
+                                   placeholder="Type to search languages…">
+                            <i class="ph ph-caret-down combobox-caret" aria-hidden="true"></i>
+                            <ul id="language-listbox" class="combobox-list" role="listbox"
+                                aria-label="Language" hidden></ul>
+                        </div>
+                    <small style="display: block; margin-top: 4px; color: var(--subtext0); font-size: 0.85em;" id="language-hint">
+                        💡 Whisper's 99 languages — pick a multilingual model to use one
+                    </small>
+                </div>
+                </div>
+                </div>
+
+                <!-- Appearance: transcription text + theme -->
+                <div class="settings-panel" id="settings-panel-appearance">
+                <div class="settings-section">
+                    <h4>Transcription Text</h4>
+
+                    <div class="form-group">
+                        <label for="font-family-select">Font Family</label>
+                        <select id="font-family-select" onchange="updateTranscriptionStyle()">
+                            <option value="monospace">Monospace</option>
+                            <option value="'Segoe UI', sans-serif">Segoe UI</option>
+                            <option value="Arial, sans-serif">Arial</option>
+                            <option value="'Courier New', monospace">Courier New</option>
+                            <option value="'Consolas', monospace">Consolas</option>
+                            <option value="Georgia, serif" selected>Georgia</option>
+                            <option value="'Times New Roman', serif">Times New Roman</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="font-size-select">Font Size</label>
+                        <select id="font-size-select" onchange="updateTranscriptionStyle()">
+                            <option value="11px">11px</option>
+                            <option value="12px">12px</option>
+                            <option value="13px">13px</option>
+                            <option value="14px">14px</option>
+                            <option value="16px">16px</option>
+                            <option value="18px" selected>18px</option>
+                            <option value="20px">20px</option>
+                            <option value="22px">22px</option>
+                            <option value="24px">24px</option>
+                            <option value="28px">28px</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="line-height-select">Line Height</label>
+                        <select id="line-height-select" onchange="updateTranscriptionStyle()">
+                            <option value="1.3">Compact</option>
+                            <option value="1.5" selected>Normal</option>
+                            <option value="1.7">Relaxed</option>
+                            <option value="2.0">Spacious</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h4>Theme</h4>
+                    <div class="form-group">
+                        <label for="light-theme-select">Light Theme</label>
+                        <select id="light-theme-select" onchange="updateThemePreferences()">
+                            <option value="latte">Bright</option>
+                            <option value="latte-soft" selected>Softened</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="dark-theme-select">Dark Theme</label>
+                        <select id="dark-theme-select" onchange="updateThemePreferences()">
+                            <option value="mocha" selected>Rich & Cozy</option>
+                            <option value="frappe">Soft & Muted</option>
+                            <option value="macchiato">Medium Contrast</option>
+                        </select>
+                    </div>
+                </div>
+                </div>
+
+                <!-- Export: slice filenames -->
+                <div class="settings-panel" id="settings-panel-export">
+                <div class="settings-section">
+                    <div class="form-group">
+                        <label for="filename-template-input">Slice filename template</label>
+                        <input type="text" id="filename-template-input" class="settings-text-input"
+                               spellcheck="false" onchange="updateFilenameTemplate()"
+                               placeholder="{source}_{index}_{slug}">
+                        <div class="settings-hint">
+                            Tokens: <code>{source}</code> <code>{index}</code> <code>{slug}</code>
+                            <code>{start}</code> <code>{end}</code>
+                        </div>
+                        <div class="settings-hint">Example: <span id="filename-example">—</span></div>
+                    </div>
+                </div>
+                </div>
+
+                <!-- Storage: downloaded models, on-disk location, session data -->
+                <div class="settings-panel" id="settings-panel-storage">
+                <div class="settings-section">
+                    <h4>Downloaded Models</h4>
+                    <div id="model-storage-list" class="storage-list">
+                        <div class="storage-empty">Loading…</div>
+                    </div>
+                    <div class="storage-total">
+                        <span>Total <strong id="model-storage-total">—</strong></span>
+                    </div>
+                    <div class="settings-hint">
+                        Models are downloaded once and reused offline. Deleting one frees the space; it
+                        re-downloads automatically next time you transcribe with it.
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h4>Location</h4>
+                    <div class="form-group">
+                        <code class="storage-path" id="storage-path">—</code>
+                        <div style="margin-top: 10px;">
+                            <button class="btn btn-secondary" onclick="openStorageFolder()">
+                                <i class="ph ph-folder-open"></i> Open folder
+                            </button>
+                        </div>
+                        <div class="settings-hint">
+                            Your downloaded models live here, as ordinary files you can back up or copy
+                            to another machine.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h4>Session</h4>
+                    <div class="form-group">
+                        <button class="btn btn-secondary" onclick="clearSession()">
+                            <i class="ph ph-arrow-counter-clockwise"></i> Clear Session Data
+                        </button>
+                        <small style="display: block; margin-top: 8px; color: var(--subtext0); font-size: 0.85em;">
+                            Removes the saved transcription, slices, and loaded file. This cannot be undone.
+                        </small>
+                    </div>
+                </div>
+                </div>
+
+                <!-- Advanced: developer -->
+                <div class="settings-panel" id="settings-panel-advanced">
+                <div class="settings-section">
+                    <h4>Getting started</h4>
+                    <div class="form-group">
+                        <button class="btn btn-secondary" onclick="startDemoWalkthrough()">
+                            <i class="ph ph-play-circle"></i> Replay walkthrough
+                        </button>
+                        <small style="display: block; margin-top: 4px; color: var(--subtext0); font-size: 0.85em;">
+                            Loads the sample clip and walks through selecting text and cutting a slice.
+                        </small>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h4>Timestamp compensation</h4>
+                    <div class="form-group">
+                        <label for="whisper-lag-input">Shift word timings earlier (ms)</label>
+                        <input type="number" id="whisper-lag-input" class="settings-text-input" min="0" max="500" step="10"
+                               value="300" onchange="setWhisperLag(this.value)" style="width: 90px;">
+                        <small style="display: block; margin-top: 4px; color: var(--subtext0); font-size: 0.85em;">
+                            The transcription model places word timings slightly late. This shifts them
+                            earlier so selections line up with the audio. Increase if a selected word plays
+                            late; decrease if it starts early. Default 300.
+                        </small>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h4>Developer</h4>
+                    <div class="form-group">
+                        <label for="show-log-tab">
+                            <input type="checkbox" id="show-log-tab" onchange="toggleLogTab(this.checked)">
+                            Show Log Tab
+                        </label>
+                        <small style="display: block; margin-top: 4px; color: var(--subtext0); font-size: 0.85em;">
+                            Shows a live log of app activity for debugging
+                        </small>
+                    </div>
+                </div>
+                </div>
+
+                <!-- About -->
+                <div class="settings-panel" id="settings-panel-about">
+                <div class="settings-section">
+                    <div class="about-info">
+                        <div><span>Version</span><span id="about-version">—</span></div>
+                        <div><span>Branch</span><span id="about-branch">—</span></div>
+                        <div><span>Commit</span><span id="about-hash">—</span></div>
+                        <div><span>Built</span><span id="about-built">—</span></div>
+                    </div>
+                </div>
+
+                <!-- Release notes, baked into changelog.json at build time from CHANGELOG.md — no
+                     network request, so the privacy policy's "no other requests" promise holds.
+                     Hidden until filled: a source checkout that hasn't run prebuild has no file. -->
+                <div class="settings-section" id="whats-new-section" style="display: none;">
+                    <h4>What's new</h4>
+                    <div id="whats-new"></div>
+                </div>
+
+                <div class="settings-section">
+                    <h4>Legal</h4>
+                    <div class="form-group">
+                        <div class="settings-hint" style="margin-top: 0;">
+                            © 2026 Wesley Scott. Vocal Slice is free software: you can redistribute
+                            and modify it under the terms of the GNU General Public License v3.0. It
+                            comes with no warranty. Source code:
+                            <a href="https://github.com/terranivium/vocal-slice" target="_blank" rel="noopener">github.com/terranivium/vocal-slice</a>.
+                        </div>
+                        <div style="margin-top: 10px;">
+                            <button class="btn btn-secondary" onclick="openThirdPartyNotices()">
+                                <i class="ph ph-scroll"></i> Third-party licenses
+                            </button>
+                        </div>
+                        <div class="settings-hint">
+                            Vocal Slice includes open-source components, each under its own license.
+                        </div>
+                    </div>
+                </div>
+                </div>
+
+                </div><!-- /.settings-panels -->
+              </div><!-- /.settings-layout -->
+            </div>
+        </div>
+        
+    </div>
+    
+    <!-- Theme Toggle Script -->
+    <script src="js/theme.js"></script>
+
+    <!-- First-run demo + coach-mark walkthrough -->
+    <script src="js/onboarding.js"></script>
+
+    <!-- Load Transformers.js -->
+    <script type="module" src="js/app.js"></script>
+
+    <!-- Inline slice editor. Lives in this hidden holder when idle; openEditMode() moves it
+         into the slice item being edited, replacing that slice's preview-waveform area. -->
+    <div id="slice-editor-holder" style="display:none;">
+        <div id="slice-editor" class="slice-editor">
+            <div class="waveform-container">
+                <div id="edit-waveform-inner" class="waveform-inner">
+                    <canvas id="edit-waveform-canvas"></canvas>
+                    <div id="edit-waveform-selection" class="waveform-selection" style="display:none;"></div>
+                    <div id="edit-waveform-text-layer" class="waveform-text-layer"></div>
+                    <div id="edit-waveform-start-handle" class="waveform-handle waveform-handle-start" style="display:none;"></div>
+                    <div id="edit-waveform-end-handle" class="waveform-handle waveform-handle-end" style="display:none;"></div>
+                    <div id="edit-waveform-playhead" class="waveform-playhead"></div>
+                </div>
+            </div>
+            <div class="transport-controls">
+                <button class="transport-btn" id="edit-preview-play-btn" title="Play">
+                    <i class="ph-fill ph-play"></i>
+                </button>
+                <button class="transport-btn" id="edit-preview-pause-btn" title="Pause" style="display:none;">
+                    <i class="ph-fill ph-pause"></i>
+                </button>
+                <button class="transport-btn" id="edit-preview-stop-btn" title="Stop">
+                    <i class="ph-fill ph-stop"></i>
+                </button>
+                <button class="transport-btn" id="edit-preview-loop-btn" title="Loop playback">
+                    <i class="ph ph-repeat"></i>
+                </button>
+                <div class="transport-divider"></div>
+                <select id="edit-playback-speed" class="transport-select" title="Playback speed">
+                    <option value="0.5">0.5x</option>
+                    <option value="0.75">0.75x</option>
+                    <option value="1" selected>1x</option>
+                    <option value="1.25">1.25x</option>
+                    <option value="1.5">1.5x</option>
+                    <option value="2">2x</option>
+                </select>
+                <div class="transport-divider"></div>
+                <div class="time-input-group">
+                    <label>Start:</label>
+                    <input type="number" id="edit-preview-start-time" step="0.01" min="0">
+                </div>
+                <div class="time-input-group">
+                    <label>End:</label>
+                    <input type="number" id="edit-preview-end-time" step="0.01" min="0">
+                </div>
+                <div class="time-duration">
+                    Duration: <span id="edit-preview-duration">0.00s</span>
+                </div>
+                <div class="transport-divider"></div>
+                <button class="transport-btn" id="edit-cancel-btn" title="Cancel edit">
+                    <i class="ph ph-x"></i>
+                </button>
+                <button class="transport-btn" id="edit-save-as-new-btn" title="Save as new slice">
+                    <i class="ph ph-plus-circle"></i>
+                </button>
+                <button class="transport-btn" id="edit-update-btn" title="Update slice">
+                    <i class="ph ph-check"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Third-party attribution, read from the bundled THIRD-PARTY-NOTICES.md by main and shown here.
+         In-app rather than handed to the OS: packaged, the file lives inside app.asar, and .md has no
+         default handler on most Windows machines. Populated by showNoticesModal() in app.js. -->
+    <div id="notices-modal" class="app-dialog" style="display:none" role="dialog" aria-modal="true"
+         aria-labelledby="notices-modal-title">
+        <div class="app-dialog-pop notices-modal-pop" role="document">
+            <div class="notices-modal-head">
+                <div class="app-dialog-title" id="notices-modal-title">Third-party licenses</div>
+                <button type="button" class="btn" id="notices-modal-close">Close</button>
+            </div>
+            <pre class="notices-modal-body" id="notices-modal-body" tabindex="0"></pre>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+</body>
+</html>
+

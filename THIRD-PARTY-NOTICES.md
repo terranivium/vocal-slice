@@ -3,7 +3,7 @@
 Vocal Slice incorporates the third-party open-source components listed below. Each remains subject
 to its own license, reproduced in full here.
 
-Nothing in the Vocal Slice license (see `LICENSE`) limits, supersedes or otherwise modifies the
+Nothing in the Vocal Slice license (GPL-3.0, see `LICENSE`) limits, supersedes or otherwise modifies the
 rights granted to you under these licenses in respect of these components.
 
 Build-time-only tooling (electron-builder, electron-reload, esbuild, html-minifier-terser, @electron/fuses) is not

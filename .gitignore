@@ -1,0 +1,74 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+venv/
+env/
+.Python
+*.egg-info/
+
+# Node.js / Electron
+node_modules/
+dist/
+*.tsbuildinfo
+yarn.lock
+
+# Build artifacts
+static/*.min.html
+static/*.min.css
+static/*.min.js
+static/build/
+static/vendor/
+static/build-info.json
+static/changelog.json
+
+# Brand: generated renders. The SVG masters and the generator ARE committed — these are
+# regenerable binaries that only add diff noise (node brand/build-icon.js recreates them).
+brand/preview/
+brand/icon.png
+
+# Brand: synthesised voiceover takes. Re-derived from narration.json on demand, and the model that
+# produces them is deterministic — committing ~10 wavs per wording change would be pure churn.
+brand/voiceover/cache/
+
+# asar extraction dumps (verification only)
+asar-extracted/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment
+.env
+
+# Code-signing certificates / private keys (never commit)
+*.pfx
+*.p12
+*.cer
+*.certSigningRequest
+
+# Release credentials — electron-builder auto-loads this file from the project root:
+# GH_TOKEN (publishing) and, on macOS, the Apple notarization vars. Never commit it.
+# The committed electron-builder.env.example is the template; it holds placeholders only.
+electron-builder.env
+
+# Every other *.env is a secrets file too (polar.env, from the 1.x sales tooling, may still be on disk).
+# Ignored by pattern rather than by name: the `.env` rule above matches ONLY the literal dotfile, so
+# adding polar.env by hand left it committable, which is exactly the mistake worth designing out.
+# The .example templates are the committed ones and carry placeholders only.
+*.env
+!*.env.example
+
+# Private, local-only: launch/ad copy and the download-count history `npm run downloads -- --record`
+# keeps. Neither belongs in the public source repo.
+marketing/
+download-stats.json
